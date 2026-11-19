@@ -1,0 +1,250 @@
+:root {
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #263b2d;
+  background: #f9fbf7;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; padding: 0; }
+body { min-width: 320px; }
+#root { max-width: none; text-align: left; }
+button, textarea { font: inherit; }
+button { cursor: pointer; }
+
+/* Main page: only the conversation scrolls */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at 12% 15%, #eaf6e4, transparent 35%),
+              radial-gradient(circle at 90% 70%, #fff1de, transparent 30%),
+              #f9fbf7;
+}
+.app-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 30px;
+  background: rgba(255,255,255,.94);
+  border-bottom: 1px solid #e0eadc;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-icon {
+  width: 46px; height: 46px; border-radius: 14px;
+  display: grid; place-items: center;
+  background: #e5f4e4; font-size: 25px;
+}
+.brand h1 { margin: 0; font-size: 21px; color: #287a46; }
+.brand span { font-size: 12px; color: #718573; }
+.header-tag {
+  background: #fff0da; color: #a66a27;
+  padding: 8px 13px; border-radius: 20px; font-size: 12px;
+}
+
+.chat-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: min(850px, 100%);
+  margin: 0 auto;
+  padding: 25px 20px;
+  scrollbar-gutter: stable;
+}
+.welcome { text-align: center; padding: 75px 12px 45px; }
+.welcome-icons { font-size: 42px; margin-bottom: 18px; }
+.welcome h2 { font-size: 31px; margin: 0 0 12px; color: #285a3b; }
+.welcome p { max-width: 450px; margin: 0 auto; color: #748275; line-height: 1.6; }
+.feature-chips {
+  display: flex; justify-content: center; gap: 10px;
+  flex-wrap: wrap; margin-top: 25px;
+}
+.feature-chips span {
+  padding: 10px 15px; border-radius: 25px;
+  background: #e7f3e5; color: #367a4b; font-size: 13px;
+}
+.feature-chips span:nth-child(2) { background: #fff0dd; color: #ad742d; }
+.feature-chips span:nth-child(3) { background: #fce8df; color: #b5674b; }
+
+/* All messages, including product results, belong to the conversation */
+.conversation { display: flex; flex-direction: column; gap: 20px; text-align: left; }
+.chat-message { display: flex; align-items: flex-start; gap: 10px; width: 100%; }
+.chat-message.user { justify-content: flex-end; }
+.chat-message.assistant { justify-content: flex-start; }
+.assistant-avatar {
+  flex-shrink: 0; background: #e5f4e4;
+  border-radius: 50%; padding: 9px;
+}
+.message-bubble {
+  max-width: 80%; padding: 13px 17px;
+  border-radius: 18px; line-height: 1.5;
+  background: #fff; border: 1px solid #e1e9df;
+  overflow-wrap: anywhere;
+}
+.user .message-bubble { background: #e2f1e2; border-color: #d0e8d0; }
+
+/* No giant white panel around assistant responses */
+.chat-message.assistant > .chat-result {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 50px);
+}
+.chat-result,
+.chat-result.confirmed-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+.chat-result > p:first-child { margin-top: 0; color: #4e6655; line-height: 1.6; }
+.selection-complete { color: #32834b; font-size: 13px; font-weight: 600; }
+
+/* Individual catalog matches remain distinct cards */
+.product-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.product-card {
+  display: flex; align-items: center; gap: 15px;
+  padding: 12px; border: 1px solid #dce9dc;
+  border-radius: 12px; background: #fff;
+  cursor: pointer; transition: background .2s, border-color .2s;
+}
+.product-card:hover { background: #f6faf4; }
+.product-card.selected { border-color: #3a9658; background: #eff8ee; }
+.product-card input { accent-color: #32834b; width: 18px; height: 18px; flex-shrink: 0; }
+.product-image, .product-placeholder { width: 75px; height: 90px; object-fit: contain; flex-shrink: 0; }
+.product-placeholder { display: grid; place-items: center; font-size: 28px; }
+.product-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.product-info strong { color: #314c39; }
+.product-info span { font-size: 14px; color: #647568; }
+.product-info small { color: #8a958c; overflow-wrap: anywhere; }
+.confirm-button {
+  background: #32834b; color: #fff; border: none;
+  padding: 12px 20px; border-radius: 10px; margin-top: 18px;
+}
+.confirm-button:disabled, .send-button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Confirmed food details: inline with assistant message */
+.confirmed-heading { color: #32834b; font-weight: 600; margin-bottom: 18px; }
+.confirmed-top { display: flex; gap: 20px; align-items: center; margin-bottom: 20px; }
+.confirmed-top img { width: 110px; height: 130px; object-fit: contain; }
+.confirmed-top h3 { margin-bottom: 6px; }
+.confirmed-top p, .confirmed-top small { color: #748275; }
+.confirmed-card h4 { margin-top: 22px; color: #32834b; text-align: left; }
+.nutrition-table { width: 100%; border-collapse: collapse; }
+.nutrition-table td { padding: 11px 8px; border-bottom: 1px solid #e4ebe1; text-align: left; }
+.nutrition-table td:last-child { text-align: right; font-weight: 600; }
+
+/* Composer stays below the scrolling conversation */
+.composer-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  width: min(850px, 100%);
+  margin: 0 auto;
+  padding: 10px 20px 20px;
+  background: #f9fbf7;
+}
+.composer {
+  background: #fff; border: 1px solid #dbe8d9;
+  border-radius: 22px; padding: 14px;
+  box-shadow: 0 8px 30px rgba(40,90,59,.08);
+}
+.composer textarea {
+  display: block; width: 100%; min-height: 60px;
+  border: none; outline: none; resize: none;
+  background: transparent; color: #263b2d; padding: 8px;
+}
+.composer-actions, .attachment-area { display: flex; align-items: center; }
+.composer-actions { justify-content: space-between; }
+.attachment-area { gap: 10px; color: #718573; font-size: 13px; }
+.attach-button {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: none; background: #e7f3e5;
+  color: #32834b; font-size: 26px; line-height: 1;
+}
+.send-button {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: none; background: #32834b; color: #fff; font-size: 23px;
+}
+.image-preview { position: relative; width: fit-content; margin-bottom: 12px; }
+.image-preview img { width: 110px; height: 110px; object-fit: cover; border-radius: 12px; }
+.image-preview button {
+  position: absolute; top: -8px; right: -8px;
+  border: none; border-radius: 50%; background: #cf5d50;
+  color: #fff; width: 25px; height: 25px;
+}
+.error-message { color: #b63e32; font-size: 13px; }
+.loading-message { color: #32834b; }
+.composer-note { text-align: center; font-size: 11px; color: #879588; margin-bottom: 0; }
+
+@media (max-width: 600px) {
+  .app-header { padding: 14px; }
+  .header-tag { display: none; }
+  .chat-area { padding: 15px; }
+  .welcome { padding-top: 55px; }
+  .welcome h2 { font-size: 25px; }
+  .chat-message.assistant > .chat-result { max-width: calc(100% - 45px); }
+  .message-bubble { max-width: 90%; }
+  .product-card { gap: 10px; padding: 10px; }
+  .product-image, .product-placeholder { width: 60px; height: 75px; }
+  .composer-wrapper { padding: 10px; }
+}
+
+.image-message {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-uploaded-image {
+  display: block;
+  max-width: 260px;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.image-message p {
+  margin: 0;
+}
+.chat-message.assistant {
+  white-space: pre-wrap;
+}
+/* Rich AI result cards inside the chat */
+.chat-message.assistant > .nutrition-result { flex: 1 1 auto; min-width: 0; max-width: calc(100% - 50px); }
+.nutrition-result { width: 100%; background: #fff; border: 1px solid #e1eadf; border-radius: 22px; padding: 22px; box-shadow: 0 10px 34px rgba(35,83,47,.07); white-space: normal; }
+.nr-eyebrow { color: #39804e; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.nr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.nr-header h3 { margin: 7px 0 4px; color: #254c35; font-size: 24px; line-height: 1.2; }
+.nr-subtitle { margin: 0; color: #718374; font-size: 13px; }
+.nr-logo { width: 54px; height: 54px; flex-shrink: 0; display: grid; place-items: center; background: #e8f5e6; border-radius: 18px; font-size: 28px; }
+.nr-section { margin-top: 23px; }
+.nr-section h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 15px; color: #284f38; }
+.nr-serving { color: #829183; font-size: 12px; font-weight: 400; margin-left: auto; }
+.nr-metrics { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.nr-metric { border-radius: 15px; padding: 15px; min-width: 0; }
+.nr-metric.orange { background: #fff2df; }
+.nr-metric.green { background: #eaf6e9; }
+.nr-metric.peach { background: #ffede4; }
+.nr-metric.blue { background: #eaf2ff; }
+.nr-metric-label { font-size: 12px; color: #657568; }
+.nr-metric-value { margin-top: 6px; font-size: 23px; font-weight: 800; color: #2d4633; }
+.nr-metric-unit { font-size: 12px; font-weight: 500; color: #708174; margin-left: 4px; }
+.nr-ingredients { display: flex; flex-wrap: wrap; gap: 8px; }
+.nr-chip { background: #f0f5ef; border: 1px solid #e3ede1; color: #41614b; padding: 8px 12px; border-radius: 99px; font-size: 13px; }
+.nr-alert { background: #fff6e7; border: 1px solid #f5e1bc; border-radius: 14px; padding: 14px; color: #8b5a21; }
+.nr-alert h4 { color: #925d21; margin: 0 0 7px; }
+.nr-alert ul, .nr-insight-list { margin: 0; padding-left: 19px; }
+.nr-alert li, .nr-insight-list li { margin: 7px 0; line-height: 1.55; font-size: 13px; }
+.nr-summary { background: #f3f9f1; border-left: 3px solid #67aa74; border-radius: 0 12px 12px 0; padding: 13px 15px; color: #3d5b45; line-height: 1.6; font-size: 14px; }
+.nr-insight-list li::marker { color: #62a26f; }
+.nr-raw { margin-top: 16px; }
+.nr-raw summary { cursor: pointer; color: #438154; font-size: 13px; font-weight: 600; }
+.nr-raw pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 12px; line-height: 1.7; background: #f7f9f6; border-radius: 10px; padding: 13px; color: #56695a; }
+.nr-note { border-top: 1px solid #e8eee6; padding-top: 13px; margin: 22px 0 0; color: #89958a; font-size: 11px; line-height: 1.5; }
+@media (max-width: 600px) { .chat-message.assistant > .nutrition-result { max-width: calc(100% - 45px); } .nutrition-result { padding: 15px; border-radius: 17px; } .nr-header h3 { font-size: 20px; } .nr-metric { padding: 11px; } .nr-metric-value { font-size: 20px; } }
