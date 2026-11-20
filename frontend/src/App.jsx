@@ -1,7 +1,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import NutritionResult from "./NutritionResult";
+import NutritionResult, { AnalysisSections } from "./NutritionResult";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -124,40 +124,7 @@ function App() {
     );
 
     try {
-      const response = await fetch(`${API_URL}/products/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          product_name: query,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Product search failed: HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const products = data.products || [];
-
-      if (products.length === 0) {
-        addMessage(
-          createMessage("assistant", "text", {
-            content:
-              "I couldn't find matching products in the catalog. Try another product name.",
-          })
-        );
-      } else {
-        addMessage(
-          createMessage("assistant", "product_list", {
-            content: `I found ${products.length} matching products. Please select the correct one.`,
-            products,
-            selectedBarcode: "",
-            confirmed: false,
-          })
-        );
-      }
+      await searchCatalog(query);
     } catch (err) {
       addMessage(
         createMessage("assistant", "text", {
@@ -169,6 +136,77 @@ function App() {
       busyRef.current = false;
       setLoading(false);
     }
+  }
+
+  async function searchCatalog(query, origin = "text") {
+    const response = await fetch(`${API_URL}/products/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_name: query }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const detail = typeof body.detail === "string" ? body.detail : "";
+      throw new Error(response.status === 502 || response.status === 503
+        ? "Product catalog is temporarily unavailable. Please try again later or provide a barcode."
+        : detail || `Product search failed: HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const products = Array.isArray(data.products) ? data.products : [];
+    if (products.length === 0) {
+      addMessage(createMessage("assistant", "text", {
+        content: "No catalog matches were found. Please try a more specific name, provide the brand, or upload a barcode photo. No nutrition data has been assumed.",
+      }));
+    } else {
+      addMessage(createMessage("assistant", "product_list", {
+        content: `Found ${products.length} possible catalog matches. Check the brand and variant carefully, then select the exact product.`,
+        products,
+        selectedBarcode: "",
+        confirmed: false,
+        origin,
+      }));
+    }
+  }
+
+  async function confirmImageIdentity(messageId) {
+    if (busyRef.current) return;
+    const item = messages.find((entry) => entry.id === messageId);
+    if (!item || item.type !== "image_identity" || item.confirmed || item.rejected) return;
+    const product = item.product || {};
+    const query = [product.brand, product.product_name, product.variant]
+      .filter((value) => typeof value === "string" && value.trim())
+      .join(" ").trim();
+    if (!query) {
+      setError("No readable product name was found. Please upload a clearer photo.");
+      return;
+    }
+    busyRef.current = true;
+    setLoading(true);
+    setError("");
+    setMessages((previous) => previous.map((entry) =>
+      entry.id === messageId ? { ...entry, confirmed: true } : entry
+    ));
+    addMessage(createMessage("user", "text", { content: `Search for: ${query}` }));
+    try {
+      await searchCatalog(query, "image");
+    } catch (err) {
+      addMessage(createMessage("assistant", "text", {
+        content: "Product identification was confirmed, but catalog search failed. No product was matched automatically.",
+      }));
+      setError(err.message);
+    } finally {
+      busyRef.current = false;
+      setLoading(false);
+    }
+  }
+
+  function rejectImageIdentity(messageId) {
+    setMessages((previous) => previous.map((entry) =>
+      entry.id === messageId && !entry.confirmed ? { ...entry, rejected: true } : entry
+    ));
+    addMessage(createMessage("assistant", "text", {
+      content: "Please upload a clearer photo showing one product, or enter the exact product name and brand in the chat.",
+    }));
   }
 
   function selectProduct(messageId, barcode) {
@@ -202,6 +240,32 @@ function App() {
       const data = await response.json();
       const product = data.product;
 
+      // Run verified, barcode-specific GPT analysis after product lookup.
+      // If the analysis service fails, still show the product information.
+      let nutritionAnalysis = null;
+      let analysisError = "";
+      try {
+        const analysisResponse = await fetch(
+          `${API_URL}/nutrition/analyze/${encodeURIComponent(barcode)}`
+        );
+        if (!analysisResponse.ok) {
+          const details = await analysisResponse.json().catch(() => ({}));
+          throw new Error(
+            typeof details.detail === "string"
+              ? details.detail
+              : `HTTP ${analysisResponse.status}`
+          );
+        }
+        const analysisData = await analysisResponse.json();
+        if (analysisData.status === "success" && analysisData.analysis) {
+          nutritionAnalysis = analysisData.analysis;
+        } else {
+          analysisError = "Verified AI nutrition analysis is unavailable for this product.";
+        }
+      } catch (analysisException) {
+        analysisError = `AI nutrition analysis unavailable: ${analysisException.message}`;
+      }
+
       // Lock only this product selection.
       setMessages((previous) =>
         previous.map((item) =>
@@ -223,6 +287,8 @@ function App() {
         createMessage("assistant", "product_details", {
           content: "Here are the available product details.",
           product,
+          analysis: nutritionAnalysis,
+          analysisError,
         })
       );
     } catch (err) {
@@ -288,13 +354,29 @@ function App() {
     }
 
     if (data.extraction_status === "success" && data.product_info) {
-      addMessage(
-        createMessage("assistant", "nutrition_result", {
-          product: data.product_info,
-          analysis: data.analysis_status === "success" ? data.nutrition_analysis : null,
-          analysisStatus: data.analysis_status,
-        })
-      );
+      const extracted = data.product_info;
+      const hasIdentity = Boolean(extracted.product_name || extracted.brand);
+      if (hasIdentity) {
+        addMessage(createMessage("assistant", "image_identity", {
+          product: extracted,
+          confirmed: false,
+          rejected: false,
+          multipleProducts: /multiple|several/i.test(classification?.reason || ""),
+        }));
+      } else {
+        addMessage(createMessage("assistant", "text", {
+          content: "The food package was detected, but its product name could not be read. Please upload a clearer image.",
+        }));
+      }
+      // Label extraction can be displayed, but do not treat front-of-package
+      // identification or the image LLM response as verified nutrition data.
+      if (extracted.nutrition_facts || extracted.ingredients) {
+        addMessage(createMessage("assistant", "nutrition_result", {
+          product: extracted,
+          analysis: null,
+          analysisStatus: "unverified",
+        }));
+      }
       return;
     }
 
@@ -307,6 +389,39 @@ function App() {
 
 
   function renderMessage(item) {
+    if (item.type === "image_identity") {
+      const product = item.product || {};
+      const identity = [product.product_name, product.variant].filter(Boolean).join(" — ") || "Unidentified food product";
+      return (
+        <div className="chat-result confirmed-card">
+          <h3>Is this the product you want to analyze?</h3>
+          <p><strong>{identity}</strong></p>
+          <p>Brand: {product.brand || "Unknown"}</p>
+          <p>Barcode: {product.barcode || "Not visible"}</p>
+          <p>Identification confidence: {product.identification_confidence || "Unknown"}</p>
+          {item.multipleProducts && (
+            <p role="note">This photo appears to contain multiple products. Confirm only if this is the intended one.</p>
+          )}
+          {item.confirmed ? (
+            <p className="selection-complete">✓ Identification confirmed. Review catalog candidates below.</p>
+          ) : item.rejected ? (
+            <p>Identification rejected. Upload another photo or enter a product name.</p>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+              <button type="button" className="confirm-button" disabled={loading}
+                onClick={() => confirmImageIdentity(item.id)}>
+                Yes, search for this product
+              </button>
+              <button type="button" disabled={loading}
+                onClick={() => rejectImageIdentity(item.id)}>
+                No, identify another product
+              </button>
+            </div>
+          )}
+          <p className="nr-note">Identification is not verification. Select an exact catalog match before using its nutrition data.</p>
+        </div>
+      );
+    }
     if (item.type === "nutrition_result") {
       return (
         <NutritionResult
@@ -467,6 +582,11 @@ function App() {
           ) : (
             <p>Nutrition information is unavailable.</p>
           )}
+
+          <AnalysisSections
+            analysis={item.analysis}
+            unavailableMessage={item.analysisError}
+          />
         </div>
       );
     }

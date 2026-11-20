@@ -17,17 +17,55 @@ const nutrientSpecs = [
   { label: "Calcium", icon: "🦴", unit: "mg", tone: "blue", patterns: [/\bcalcium\s*(?:\(\s*mg\s*\))?\s*[:\s]*([\d.]+)\s*mg?\b/i] },
 ];
 
+
+// Reused for barcode-based GPT analysis and image-label analysis.
+export function AnalysisSections({ analysis, unavailableMessage = "" }) {
+  if (!analysis) {
+    return unavailableMessage ? (
+      <section className="nr-section" aria-live="polite">
+        <h4>🤖 AI Nutrition Analysis</h4>
+        <p className="nr-subtitle">{unavailableMessage}</p>
+      </section>
+    ) : null;
+  }
+
+  const sections = [
+    { heading: "✨ Positive aspects", items: analysis.positive_aspects },
+    { heading: "⚠️ Concerns", items: analysis.concerns },
+    { heading: "💡 Recommendations", items: analysis.recommendations },
+    { heading: "ℹ️ Limitations", items: analysis.limitations },
+    // Legacy image-analysis response fields remain supported.
+    { heading: "✨ Nutritional highlights", items: analysis.nutritional_highlights },
+    { heading: "🌿 Ingredient insights", items: analysis.ingredients_analysis },
+    { heading: "❤️ Things to consider", items: analysis.health_considerations },
+  ];
+
+  return (
+    <section className="nr-section nutrition-ai-analysis" aria-label="AI nutrition analysis">
+      <h4>🤖 AI Nutrition Analysis</h4>
+      {typeof analysis.summary === "string" && analysis.summary && (
+        <p className="nr-summary">{analysis.summary}</p>
+      )}
+      {sections.map(({ heading, items }) =>
+        Array.isArray(items) && items.length > 0 ? (
+          <div key={heading} className="nr-section">
+            <h4>{heading}</h4>
+            <ul className="nr-insight-list">
+              {items.map((item, index) => <li key={index}>{item}</li>)}
+            </ul>
+          </div>
+        ) : null
+      )}
+    </section>
+  );
+}
+
 function NutritionResult({ product = {}, analysis, analysisStatus }) {
   const facts = product.nutrition_facts || "";
   const metrics = nutrientSpecs.map((spec) => ({ ...spec, value: getNutrient(facts, spec.patterns) })).filter((metric) => metric.value !== null);
   const servingMatch = facts.match(/\bper\s+(\d+(?:\.\d+)?\s*(?:gms?|grams?|ml)\b(?:\s+per\s+pcs)?)/i);
   const serving = servingMatch ? `Per ${servingMatch[1]}` : "As shown on label";
   const ingredients = (product.ingredients || "").split(/[,;&\n]+/).map((s) => s.trim()).filter(Boolean);
-  const sections = [
-    { heading: "✨ Nutritional highlights", items: analysis?.nutritional_highlights },
-    { heading: "🌿 Ingredient insights", items: analysis?.ingredients_analysis },
-    { heading: "❤️ Things to consider", items: analysis?.health_considerations },
-  ];
 
   return (
     <article className="nutrition-result">
@@ -70,19 +108,7 @@ function NutritionResult({ product = {}, analysis, analysisStatus }) {
         </section>
       )}
 
-      {analysis?.summary && (
-        <section className="nr-section">
-          <h4>🤖 AI nutrition overview</h4>
-          <div className="nr-summary">{analysis.summary}</div>
-        </section>
-      )}
-
-      {sections.map((section) => Array.isArray(section.items) && section.items.length > 0 ? (
-        <section className="nr-section" key={section.heading}>
-          <h4>{section.heading}</h4>
-          <ul className="nr-insight-list">{section.items.map((item, i) => <li key={i}>{item}</li>)}</ul>
-        </section>
-      ) : null)}
+      <AnalysisSections analysis={analysis} />
 
       {analysisStatus === "failed" && <p className="nr-subtitle nr-section">AI nutrition analysis is unavailable right now. Extracted label information is shown above.</p>}
       {facts && <details className="nr-raw"><summary>View extracted nutrition label text</summary><pre>{facts}</pre></details>}

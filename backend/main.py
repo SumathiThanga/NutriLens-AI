@@ -7,6 +7,8 @@ from fastapi import UploadFile, File
 from vision_service import classify_food_image
 from product_extraction import extract_product_information
 from nutrition_analysis import analyze_nutrition
+from fastapi import HTTPException
+from nutrition_pipeline import run_nutrition_pipeline
 
 
 app = FastAPI(
@@ -191,3 +193,35 @@ def get_product_details(barcode: str):
         "status": "success",
         "product": product
     }
+
+
+@app.get("/nutrition/analyze/{barcode}")
+async def analyze_product_nutrition(barcode: str):
+    barcode = barcode.strip()
+
+    if not barcode.isdigit() or len(barcode) not in (8, 12, 13, 14):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product barcode"
+        )
+
+    try:
+        result = await run_nutrition_pipeline(barcode)
+
+        if result["status"] == "nutrition_unavailable":
+            raise HTTPException(
+                status_code=404,
+                detail="Verified nutrition data unavailable for this barcode"
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        # Do not expose internal errors or API credentials.
+        raise HTTPException(
+            status_code=500,
+            detail="Nutrition analysis failed"
+        )
