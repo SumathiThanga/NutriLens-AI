@@ -118,3 +118,78 @@ function NutritionResult({ product = {}, analysis, analysisStatus }) {
 }
 
 export default NutritionResult;
+
+
+export function formatProductTitle(product = {}) {
+  const brand = String(product.brand || "").trim().replace(/\s+/g, " ");
+  const name = String(product.product_name || "").trim().replace(/\s+/g, " ");
+  const lower = name.toLowerCase();
+  const prefix = brand.toLowerCase();
+  if (brand && (lower === prefix || (lower.startsWith(prefix) && /^[\s\-–—:]/.test(name.slice(brand.length))))) return name;
+  return [brand, name].filter(Boolean).join(" ") || "Food product";
+}
+
+export function WebNutritionResult({ product = {}, analysis, analysisStatus, analysisError, analysisMode }) {
+  const list = (value) => Array.isArray(value) ? value.filter(Boolean) : [];
+  const rows = list(product.nutrition_per_100g);
+  const groups = [
+    { heading: "Ingredients", facts: list(product.ingredients), tone: "ingredient" },
+    { heading: "Additives", facts: list(product.additives), tone: "additive" },
+  ];
+  const allergenGroups = [
+    { heading: "Declared presence", facts: list(product.allergens), tone: "allergen" },
+    { heading: "Possible presence", facts: list(product.possible_allergens), tone: "possible" },
+    { heading: "Website free-from claims (unverified)", facts: list(product.allergen_absence_claims), tone: "absence" },
+    { heading: "Uncertain claims", facts: list(product.uncertain_allergen_claims), tone: "absence" },
+  ];
+  const specs = [
+    ["Calories", /^(energy|calories)$/i], ["Protein", /^protein$/i],
+    ["Total fat", /^(total fat|fat)$/i], ["Sugars", /^(total sugars|sugars|sugar)$/i],
+    ["Fibre", /^(dietary )?fib(re|er)$/i], ["Sodium", /^sodium$/i],
+  ];
+  const metrics = specs.map(([label, pattern]) => ({ label, row: rows.find(r => pattern.test(r.name)) })).filter(m => m.row);
+  const source = (() => { try { const u = new URL(product.source_url); return u.protocol === "https:" ? u.href : undefined; } catch { return undefined; } })();
+  const evidence = [...rows, ...groups.flatMap(g => g.facts), ...allergenGroups.flatMap(g => g.facts)].filter(f => f.evidence);
+  return (
+    <article className="nutrition-result web-result web-compact">
+      <div className="nr-eyebrow">Website-reported • Not barcode verified</div>
+      <h3>{formatProductTitle(product)}</h3>
+      <p className="nr-subtitle">{product.package_size || product.package_size_hint || "Package size unavailable"}</p>
+      <section className="nr-section">
+        <h4>Nutrition snapshot {rows.length > 0 && <span className="nr-serving">Per 100 g</span>}</h4>
+        {metrics.length > 0 && <div className="web-metrics">{metrics.map(({label,row}) => (
+          <div className="web-metric" key={label}><span>{label}</span><strong>{row.value} <small>{row.unit}</small></strong></div>
+        ))}</div>}
+        {rows.length > 0 ? <details className="web-details" open={metrics.length === 0 ? true : undefined}>
+          <summary>View complete nutrition table ({rows.length})</summary>
+          <table className="nutrition-table"><tbody>{rows.map((r,i) => <tr key={i}><td>{r.name}</td><td>{r.value} {r.unit}</td></tr>)}</tbody></table>
+        </details> : <p className="nr-subtitle">Numerical nutrition values are unavailable from this source.</p>}
+      </section>
+      {groups.map(({heading,facts,tone}) => <section className="nr-section" key={heading}>
+        <h4>{heading}</h4>
+        {tone === "ingredient" && <p className="nr-subtitle web-classification">{product.ingredient_list_status === "declared_list_present" ? "Website-declared ingredient list (not independently verified)." : "Partial or unknown ingredient list."}</p>}
+        {facts.length ? <div className="web-chips">{facts.map((f,i) => <span key={i} className={`web-chip ${tone}`}>{f.name}{f.value && f.value !== f.name ? ` · ${f.value}` : ""}</span>)}</div> : <p className="nr-subtitle">{tone === "additive" ? "No supported additive declarations found; absence is not established." : "Ingredient information unavailable."}</p>}
+      </section>)}
+      <section className="nr-section">
+        <h4>Allergen information</h4>
+        <p className="nr-subtitle">{product.allergen_status === "unknown" || !product.allergen_status ? "Allergen status: Unknown" : "Website-reported allergen information (unverified)"}</p>
+        {allergenGroups.filter(g => g.facts.length).map(({heading,facts,tone}) => <div className="web-allergen-group" key={heading}>
+          <h5>{heading}</h5>
+          <div className="web-chips">{facts.map((f,i) => <span key={i} className={`web-chip ${tone}`}>{f.name}</span>)}</div>
+        </div>)}
+        <p className="nr-subtitle web-classification">Missing declarations and free-from claims do not establish allergy safety. Check the original package.</p>
+      </section>
+      {evidence.length > 0 && <details className="web-details"><summary>View source evidence ({evidence.length} facts)</summary>
+        <dl className="web-evidence-list">{evidence.map((f,i) => <React.Fragment key={i}><dt>{f.name}</dt><dd>{f.evidence}{f.basis_evidence && ` — ${f.basis_evidence}`}</dd></React.Fragment>)}</dl>
+      </details>}
+      {source && <p className="web-source-link"><a href={source} target="_blank" rel="noopener noreferrer">View original product source</a></p>}
+      <div className="web-ai-report" aria-live="polite" aria-busy={analysisStatus === "loading"}>
+        {analysisStatus === "loading" ? <section className="nr-section"><h4>🤖 AI Nutrition Analysis</h4><p className="web-analysis-loading"><span className="web-spinner" aria-hidden="true" /> Analyzing available website information…</p></section> : analysis ? <>
+          <p className="nr-subtitle web-analysis-mode">{({ingredient_based: "Ingredient-based analysis", nutrition_based: "Nutrition-based analysis", combined: "Nutrition and ingredient analysis", limited: "Limited analysis"})[analysisMode] || "Website-based analysis"} · Unverified source</p>
+          <AnalysisSections analysis={analysis} />
+        </> : <AnalysisSections unavailableMessage={analysisError || "AI nutrition analysis unavailable. Source facts remain available."} />}
+      </div>
+      <p className="nr-note">Product identity confirmed by you; website data is not independently verified. Check the actual package, especially allergens. General information only, not medical advice.</p>
+    </article>
+  );
+}

@@ -248,3 +248,191 @@ button { cursor: pointer; }
 .nr-raw pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 12px; line-height: 1.7; background: #f7f9f6; border-radius: 10px; padding: 13px; color: #56695a; }
 .nr-note { border-top: 1px solid #e8eee6; padding-top: 13px; margin: 22px 0 0; color: #89958a; font-size: 11px; line-height: 1.5; }
 @media (max-width: 600px) { .chat-message.assistant > .nutrition-result { max-width: calc(100% - 45px); } .nutrition-result { padding: 15px; border-radius: 17px; } .nr-header h3 { font-size: 20px; } .nr-metric { padding: 11px; } .nr-metric-value { font-size: 20px; } }
+
+/* Desktop information sidebar and chat workspace */
+.app-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+.info-sidebar {
+  width: 320px;
+  flex: 0 0 320px;
+  overflow-y: auto;
+  padding: 18px 16px 24px;
+  background: linear-gradient(155deg, #f0f9ee 0%, #f7faf4 55%, #fff7ed 100%);
+  border-right: 1px solid #dfeadf;
+  scrollbar-width: thin;
+  scrollbar-color: #c5d8c6 transparent;
+}
+.sidebar-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #176b4d 0%, #238b63 100%);
+  color: white;
+  padding: 22px 19px 16px;
+  box-shadow: 0 12px 25px rgba(28, 111, 76, .13);
+}
+.sidebar-eyebrow {
+  font-size: 10px;
+  letter-spacing: .09em;
+  font-weight: 800;
+  color: #d5f6d5;
+}
+.sidebar-hero h2 {
+  font-size: 23px;
+  line-height: 1.18;
+  letter-spacing: -.025em;
+  margin: 16px 0 10px;
+  color: white;
+}
+.sidebar-hero p { font-size: 12px; line-height: 1.65; color: #e1f4e8; margin: 0; }
+.sidebar-hero-decoration { margin-top: 15px; font-size: 23px; letter-spacing: 8px; }
+.sidebar-section-title {
+  color: #286247;
+  font-weight: 800;
+  font-size: 13px;
+  margin: 23px 3px 12px;
+}
+.sidebar-feature-list {
+  background: #fff;
+  border: 1px solid #e2ede1;
+  border-radius: 18px;
+  padding: 5px 13px;
+  box-shadow: 0 6px 18px rgba(44, 89, 53, .04);
+}
+.sidebar-feature { display: flex; gap: 11px; padding: 14px 0; align-items: flex-start; }
+.sidebar-feature + .sidebar-feature { border-top: 1px solid #eef2eb; }
+.sidebar-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+.sidebar-feature-icon.scan { background: #e3f4e8; }
+.sidebar-feature-icon.nutrition { background: #fff1d9; }
+.sidebar-feature-icon.insights { background: #f0eaff; }
+.sidebar-feature h3 { margin: 1px 0 4px; font-size: 12px; color: #234e37; }
+.sidebar-feature p { margin: 0; font-size: 11px; color: #6c7d70; line-height: 1.5; }
+.sidebar-howto {
+  background: #fff;
+  border: 1px solid #e2ede1;
+  border-radius: 18px;
+  margin-top: 15px;
+  padding: 17px 15px;
+}
+.sidebar-howto h3 { font-size: 13px; color: #286247; margin: 0 0 14px; }
+.sidebar-howto ol { margin: 0; padding-left: 23px; }
+.sidebar-howto li { padding-left: 3px; margin: 0 0 12px; color: #279064; font-weight: 800; font-size: 12px; }
+.sidebar-howto li:last-child { margin-bottom: 0; }
+.sidebar-howto li span { font-size: 11px; font-weight: 400; color: #536b5a; line-height: 1.5; }
+.sidebar-tip { display: flex; gap: 9px; background: #fff3df; border-radius: 15px; padding: 12px; margin-top: 15px; }
+.sidebar-tip p { margin: 0; color: #846034; font-size: 11px; line-height: 1.55; }
+.sidebar-disclaimer { font-size: 10px; line-height: 1.5; color: #718678; padding: 0 5px; margin-top: 15px; }
+.chat-column {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+@media (max-width: 1050px) {
+  .info-sidebar { width: 270px; flex-basis: 270px; padding: 14px 11px; }
+  .sidebar-hero h2 { font-size: 21px; }
+}
+@media (max-width: 760px) {
+  .app-workspace { flex-direction: column; }
+  .info-sidebar { width: 100%; flex: 0 0 auto; max-height: 145px; overflow-y: auto; padding: 10px 14px; border-right: 0; border-bottom: 1px solid #dfeadf; }
+  .sidebar-hero { padding: 12px 15px; border-radius: 15px; }
+  .sidebar-hero h2 { font-size: 16px; margin: 6px 0 3px; }
+  .sidebar-hero p { font-size: 11px; }
+  .sidebar-hero-decoration, .sidebar-section-title, .sidebar-feature-list, .sidebar-howto, .sidebar-tip, .sidebar-disclaimer { display: none; }
+  .chat-column { min-height: 0; }
+}
+/* Consistent product confirmation buttons */
+.confirm-button,
+.reject-button {
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+/* Red rejection button */
+.reject-button {
+  background-color: #dc3545;
+  color: #ffffff;
+  border: 1px solid #dc3545;
+}
+
+.reject-button:hover:not(:disabled) {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.reject-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* Website fallback cards */
+.web-candidate { background: white; border: 1px solid #dce9dc; border-radius: 12px; padding: 14px; white-space: normal; overflow-wrap: anywhere; }
+.web-candidate.selected { border-color: #32834b; background: #eff8ee; }
+.web-choice { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.web-choice input { accent-color: #32834b; }
+.web-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.web-meta span { background: #edf4eb; padding: 5px 8px; border-radius: 8px; font-size: 12px; }
+.web-candidate a, .web-result a { color: #287a46; text-decoration: underline; font-size: 13px; }
+.web-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.web-actions button { flex: 1 1 150px; }
+.web-evidence { font-size: 12px; color: #647568; margin-top: 4px; }
+.web-evidence p { overflow-wrap: anywhere; }
+
+/* Compact website nutrition report */
+.web-compact { padding: 18px; }
+.web-compact h3 { margin: 8px 0 5px; color: #254c35; font-size: 21px; }
+.web-compact .nr-section { margin-top: 15px; }
+.web-compact .nr-section h4 { margin-bottom: 8px; }
+.web-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.web-metric { background: #edf5eb; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.web-metric:nth-child(3n+1) { background: #fff2df; }
+.web-metric > span { font-size: 12px; color: #536b5a; }
+.web-metric strong { font-size: 19px; color: #254c35; overflow-wrap: anywhere; }
+.web-metric small { font-size: 11px; font-weight: 500; }
+.web-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.web-chip { border-radius: 16px; padding: 5px 9px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; max-width: 100%; }
+.web-chip.ingredient { background: #edf5eb; color: #315c40; }
+.web-chip.allergen { background: #fff0dc; color: #81531e; border: 1px solid #f1d9b6; }
+.web-chip.additive { background: #f4f6f3; border: 1px solid #dfe8dc; color: #425b49; }
+.web-details { margin-top: 12px; font-size: 13px; }
+.web-details summary { cursor: pointer; color: #287a46; font-weight: 600; padding: 4px 0; }
+.web-compact .nutrition-table td { padding: 6px 4px; font-size: 13px; }
+.web-evidence-list { background: #f7f9f6; padding: 10px; border-radius: 8px; overflow-wrap: anywhere; }
+.web-evidence-list dt { font-weight: 600; }
+.web-evidence-list dd { margin: 3px 0 10px; color: #536b5a; }
+.web-source-link { margin: 10px 0 0; }
+.web-compact .nr-note { margin-top: 12px; padding-top: 9px; }
+@media (max-width: 600px) { .web-compact { padding: 12px; } .web-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .web-metric strong { font-size: 17px; } }
+
+/* Website evidence classifications */
+.web-classification { margin: 5px 0 8px; line-height: 1.5; }
+.web-allergen-group { margin-top: 10px; }
+.web-allergen-group h5 { font-size: 12px; margin: 0 0 6px; color: #536b5a; }
+.web-chip.possible { background: #fff0dc; color: #81531e; border: 1px dashed #c69c64; }
+.web-chip.absence { background: #f1f3f5; color: #485563; border: 1px solid #dce1e6; }
+
+/* Website AI analysis */
+.web-ai-report { border-top: 1px solid #e1eadf; margin-top: 16px; padding-top: 10px; }
+.web-analysis-mode { margin-top: 4px; }
+.web-ai-report .nr-section { margin-top: 12px; }
+.web-analysis-loading { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #32834b; }
+.web-spinner { width: 16px; height: 16px; flex-shrink: 0; border: 2px solid #dce9dc; border-top-color: #32834b; border-radius: 50%; animation: web-spin .8s linear infinite; }
+@keyframes web-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .web-spinner { animation: none; } }

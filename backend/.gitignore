@@ -11,3 +11,7 @@ __pycache__/
 # React
 node_modules/
 dist/
+# Internal Python test scripts
+test*.py
+validated_products.json
+web_result.json

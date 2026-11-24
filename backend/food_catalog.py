@@ -8,6 +8,8 @@ import copy
 import logging
 import os
 import random
+import re
+import unicodedata
 import threading
 import time
 from email.utils import parsedate_to_datetime
@@ -16,6 +18,7 @@ from datetime import datetime, timezone
 import requests
 
 BASE_URL = "https://world.openfoodfacts.org/cgi/search.pl"
+SEARCH_V2_URL = "https://world.openfoodfacts.org/api/v2/search"
 PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 
 # Set OFF_CONTACT_EMAIL in your backend environment for a real contact address.
@@ -74,7 +77,7 @@ def _retry_delay(response, attempt):
     return min(2 ** attempt + random.uniform(0, 0.4), 8.0)
 
 
-def _get_json(url, params=None):
+def _get_json(url, params=None, allow_product_not_found=False):
     for attempt in range(MAX_ATTEMPTS):
         response = None
         try:
@@ -89,6 +92,10 @@ def _get_json(url, params=None):
                 )
                 time.sleep(delay)
                 continue
+            if allow_product_not_found and response.status_code == 404:
+                data = response.json()
+                if isinstance(data, dict) and data.get("status") == 0:
+                    return data
             response.raise_for_status()
             return response.json()
         except (requests.Timeout, requests.ConnectionError) as exc:
@@ -100,45 +107,133 @@ def _get_json(url, params=None):
 
 
 def _search_once(term):
+    """Search OFF with endpoint failover; only cache successful responses."""
     key = ("search", term.casefold())
     cached = _cached(key)
     if cached is not None:
         return cached
 
-    params = {
-        "search_terms": term,
-        "search_simple": 1,
-        "action": "process",
-        "json": 1,
-        "page_size": 5,
-        "fields": "code,product_name,brands,image_front_small_url",
-    }
-    try:
-        data = _get_json(BASE_URL, params=params)
-    except (requests.RequestException, ValueError):
-        stale = _cached(key, allow_stale=True)
-        if stale is not None:
-            logger.warning("Using previously cached catalog search for %r", term)
-            return stale
-        raise
+    common_fields = "code,product_name,brands,image_front_small_url"
+    endpoints = [
+        (BASE_URL, {
+            "search_terms": term,
+            "search_simple": 1,
+            "action": "process",
+            "json": 1,
+            "page_size": 10,
+            "fields": common_fields,
+        }),
+        (SEARCH_V2_URL, {
+            "search_terms": term,
+            "page_size": 10,
+            "fields": common_fields,
+        }),
+    ]
+    last_error = None
+    for url, params in endpoints:
+        try:
+            data = _get_json(url, params=params)
+            products = data.get("products", [])
+            if not isinstance(products, list):
+                raise ValueError("Unexpected Open Food Facts search response")
+            products = [p for p in products if isinstance(p, dict) and p.get("code")]
+            _remember(key, products, SEARCH_TTL_SECONDS)
+            return products
+        except (requests.RequestException, ValueError) as exc:
+            last_error = exc
+            logger.warning("Open Food Facts search endpoint failed for %r (%s): %s", term, url, exc)
 
-    products = data.get("products", [])
-    if not isinstance(products, list):
-        raise ValueError("Unexpected Open Food Facts search response")
-    products = [p for p in products if isinstance(p, dict) and p.get("code")]
-    _remember(key, products, SEARCH_TTL_SECONDS)
-    return products
+    stale = _cached(key, allow_stale=True)
+    if stale is not None:
+        logger.warning("Using previously cached catalog search for %r", term)
+        return stale
+    if last_error is not None:
+        raise last_error
+    return []
 
 
-def _fallback_term(term):
-    """One conservative shorter search; never treats results as exact matches."""
+def _fallback_terms(term):
+    """Broaden search cautiously; results always require exact product confirmation."""
     words = term.split()
-    if len(words) < 3:
-        return None
+    candidates = []
     if term.casefold().endswith(" indian mix"):
-        return term[:-len(" indian mix")].strip() or None
-    # Other multiword names: remove only the last descriptive word.
-    return " ".join(words[:-1])
+        candidates.append(term[:-len(" indian mix")].strip())
+    if len(words) >= 3:
+        candidates.append(" ".join(words[:-1]))
+    elif len(words) == 2:
+        # A brand-only search may be less specific but can help when the
+        # exact brand + product search is unavailable or yields no results.
+        candidates.append(words[0])
+        candidates.append(words[1])
+    seen = {term.casefold()}
+    result = []
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if len(candidate) >= 2 and candidate.casefold() not in seen:
+            seen.add(candidate.casefold())
+            result.append(candidate)
+    return result
+
+
+# Generic packaging descriptors are not enough to establish a match.
+_GENERIC_WORDS = {
+    "indian", "mix", "mixture", "food", "foods", "product", "products",
+    "pack", "packet", "pouch", "fresh", "original", "classic", "new",
+    "high", "protein", "low", "fat", "g", "gm", "grams", "kg", "ml", "l",
+}
+
+
+def _name_tokens(value):
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = re.sub(r"([a-z])([A-Z])", r"\1 \2", normalized)
+    return [token for token in re.findall(r"[a-z0-9]+", normalized.casefold())
+            if len(token) > 1 and not token.isdigit()]
+
+
+def _match_score(query, product):
+    """Conservative lexical filter; never asserts that a candidate is verified."""
+    requested = [t for t in _name_tokens(query) if t not in _GENERIC_WORDS]
+    if not requested:
+        return 0.0
+
+    name = _name_tokens(product.get("product_name"))
+    brand = _name_tokens(product.get("brands"))
+    # Handle 'milkymist' vs 'milky mist', without accepting arbitrary substrings.
+    joined_name = set(name + brand)
+    joined_name.update(a + b for a, b in zip(name, name[1:]))
+    joined_name.update(a + b for a, b in zip(brand, brand[1:]))
+    matched = sum(1 for t in requested if t in joined_name)
+    if not matched:
+        return 0.0
+
+    # A single generic-looking word must not qualify a multiword query.
+    if len(requested) >= 2 and matched < 2:
+        return 0.0
+    if len(requested) >= 3 and matched / len(requested) < 0.60:
+        return 0.0
+
+    # Prefer exact product-name matches; brand-only hits cannot qualify.
+    name_joined = set(name)
+    name_joined.update(a + b for a, b in zip(name, name[1:]))
+    name_matches = sum(t in name_joined for t in requested)
+    if name_matches == 0:
+        return 0.0
+
+    return (matched / len(requested)) + 0.1 * (name_matches / len(requested))
+
+
+def _relevant_candidates(query, products):
+    ranked = []
+    seen = set()
+    for product in products:
+        score = _match_score(query, product)
+        barcode = str(product.get("code", ""))
+        if score > 0 and barcode and barcode not in seen:
+            ranked.append((score, product))
+            seen.add(barcode)
+    ranked.sort(key=lambda entry: entry[0], reverse=True)
+    return [product for _, product in ranked]
 
 
 def search_food_products(product_name: str):
@@ -146,14 +241,31 @@ def search_food_products(product_name: str):
     if len(term) < 2:
         return []
 
-    results = _search_once(term)
-    if results:
-        return results
+    had_successful_search = False
+    last_error = None
+    for candidate in [term, *_fallback_terms(term)]:
+        try:
+            products = _search_once(candidate)
+            had_successful_search = True
+            relevant = _relevant_candidates(term, products)
+            if relevant:
+                if candidate != term:
+                    logger.info("Using filtered broader results for %r from %r", term, candidate)
+                return relevant
+            if products:
+                logger.info("Discarded %d unrelated catalog candidates for %r", len(products), term)
+        except (requests.RequestException, ValueError) as exc:
+            last_error = exc
+            logger.warning("Catalog candidate search failed for %r: %s", candidate, exc)
 
-    shorter = _fallback_term(term)
-    if shorter and shorter.casefold() != term.casefold():
-        logger.info("No results for %r; trying broader candidate search %r", term, shorter)
-        return _search_once(shorter)
+    # Empty results from a working endpoint mean no matches; if all endpoints
+    # failed, propagate the failure so the API can return 502 instead.
+    if had_successful_search:
+        return []
+    if last_error is not None:
+        if isinstance(last_error, requests.RequestException):
+            raise last_error
+        raise requests.RequestException("Open Food Facts returned invalid search data") from last_error
     return []
 
 
@@ -168,7 +280,7 @@ def get_product_by_barcode(barcode: str):
         return cached
 
     try:
-        data = _get_json(PRODUCT_URL.format(barcode=barcode))
+        data = _get_json(PRODUCT_URL.format(barcode=barcode), allow_product_not_found=True)
     except (requests.RequestException, ValueError):
         stale = _cached(key, allow_stale=True)
         if stale is not None:
@@ -176,9 +288,10 @@ def get_product_by_barcode(barcode: str):
             return stale
         raise
 
-    if data.get("status") != 1:
-        _remember(key, None, SEARCH_TTL_SECONDS)
+    if isinstance(data, dict) and data.get("status") == 0:
         return None
+    if not isinstance(data, dict) or data.get("status") != 1:
+        raise requests.RequestException("Unexpected product lookup response")
 
     product = data.get("product") or {}
     # Do not silently accept a different barcode's data.
