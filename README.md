@@ -355,14 +355,16 @@ dist/
 
 Do not commit `.env`, API keys, virtual environments, generated credentials, or other secrets.
 
-## Current development priorities
+## Future Enhancements
 
-1. Resolve the Kruncho Classic Millet Cookie website discovery regression and investigate intermittent upstream catalog failures.
-2. Test the improved ingredient analysis and combined, nutrition-only and limited analysis modes across more products.
-3. Expand reproducible automated tests for source matching, allergen classification, network security and output validation.
-4. Prepare public HTTPS deployment on AWS, authentication, shared cache/storage, observability and multi-user load testing.
-5. Consider additional trusted nutrition sources and multi-image package uploads.
-
+1. **Product Discovery:** Improve hybrid search accuracy, product matching, website coverage, and resilience against external API failures.
+2. **AI Nutrition Analysis:** Enhance ingredient-based, nutrition-based, and combined analysis across a wider range of packaged food products.
+3. **Automated Testing:** Expand test coverage for product identity verification, nutrient consolidation, allergen classification, network security, and LLM output validation.
+4. **Cloud Deployment:** Deploy the application on AWS with public HTTPS access, secure API configuration, and scalable infrastructure.
+5. **Multi-User Support:** Implement user authentication, session management, shared caching, and concurrent request handling.
+6. **Performance and Scalability:** Introduce load testing, application monitoring, distributed processing, and CI/CD pipelines.
+7. **Data Source Expansion:** Integrate additional trusted nutrition databases to improve product coverage and information reliability.
+8. **Multi-Image Support:** Enable multiple package-image uploads to consolidate product identity, ingredient lists, barcodes, and nutrition labels.
 ## License
 
 No license has been specified. Add a `LICENSE` file if you want to grant reuse permissions.
