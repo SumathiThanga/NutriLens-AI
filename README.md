@@ -2,19 +2,53 @@
 
 **NutriLens AI** is a React + FastAPI application for identifying packaged foods, retrieving product-specific nutrition facts, and generating AI-assisted nutrition insights. Users can search by product name or upload a food-package image. The application prioritizes **verified product identity and source-grounded nutrition data** over guesses based on similar foods.
 
-> **Development status:** Active prototype. The barcode-based Open Food Facts + USDA retrieval, normalization, consolidation, and GPT nutrition-analysis pipeline has been implemented and locally tested. Image-based product identification and confirmation are integrated. **Open Food Facts search failures (including HTTP 502/503) remain under investigation.** This is not a production release.
+> **Development status:** Active development. The core workflows, including image-based product identification, hybrid product discovery, parallel nutrition retrieval, secure website extraction, and AI-powered nutrition analysis, are implemented and locally tested. Cloud deployment, scalability, and multi-user support are planned enhancements.
 
 ## Features
 
-- **Catalog search:** Search Open Food Facts for packaged-food products and review candidates.
-- **Product confirmation:** Select a specific catalog product before requesting its nutrition analysis.
-- **Image upload:** Classify an uploaded package image and extract visible product information using an OpenAI vision-capable model.
-- **Identity-first image workflow:** Display the extracted product name, brand, variant, barcode (when visible), and identification confidence. Require user confirmation before searching for catalog candidates.
-- **Exact-barcode nutrition retrieval:** Query Open Food Facts and USDA FoodData Central concurrently; do not treat a similar product as an exact match.
-- **Normalization and provenance:** Normalize supported nutrients to a per-100 g basis where source data permits; retain nutrient sources and identify conflicts.
-- **Grounded AI analysis:** Generate structured nutrition commentary from available verified nutrients, then validate the generated output.
-- **Chat-style interface:** React UI for search, upload, product selection, and nutrition results.
-- **Resilient catalog client:** The updated catalog module includes bounded retries, short-name fallback searches, and in-memory caching. These measures cannot guarantee service availability.
+- **Hybrid product discovery:** Open Food Facts catalog search first; Brave Search fallback when no catalog candidates are available or the catalog is unavailable.
+- **Image recognition:** Classify food-package images and extract visible names, brands, variants, barcodes, ingredients and nutrition labels. Select individual products when multiple packages appear in one image.
+- **Identity confirmation:** Review extracted package information, attempt exact-barcode lookup, fall back to name search when needed, and explicitly confirm a catalog or website candidate.
+- **Parallel nutrition retrieval:** Retrieve Open Food Facts and USDA FoodData Central records concurrently, verify exact barcode matches, normalize supported nutrients and consolidate with provenance and conflict checks.
+- **Website extraction:** Discover product pages, extract HTML and structured product metadata, validate product identity and retain evidence for reported ingredients, nutrients, additives and allergens.
+- **Defensive web fetching:** HTTPS-only requests, public-IP checks, DNS pinning, TLS verification, redirect revalidation, bounded fetch attempts, response-size limits, caching and HTTP 429 cooldowns.
+- **Grounded AI analysis:** Separate barcode and website analysis paths. Website analysis supports ingredient-only, nutrition-only, combined and limited-data modes, with structured output validation and explicit uncertainty.
+- **Allergen classification:** Distinguish declared presence, possible presence, unverified free-from claims and uncertain claims. Missing declarations do not establish safety.
+- **Conversational nutrition Q&A:** Route food-related questions and product searches, using confirmed product context and bounded recent conversation history.
+- **Compact React interface:** Product selection, nutrition snapshots, expandable tables and source evidence, loading states and graceful analysis failure handling.
+
+## System architecture
+
+```mermaid
+flowchart TD
+    U[React chat interface] --> R[FastAPI routing]
+    R --> V[Image classification and extraction]
+    V --> P[Package review and product selection]
+    P --> B[Barcode lookup when available]
+    B -->|Match| C[Confirm catalog identity]
+    B -->|Missing or unavailable| S[Open Food Facts name search]
+    R --> S
+    S -->|Candidates found| C
+    S -->|No candidates or unavailable| W[Brave Search discovery]
+    W --> F[Defensive web fetching and HTML extraction]
+    F --> I[Identity and source evidence validation]
+    I --> D[Confirm website candidate]
+    C --> O[Open Food Facts barcode retrieval]
+    C --> A[USDA FoodData Central barcode retrieval]
+    O --> N[Verify normalize and consolidate]
+    A --> N
+    N --> G[Grounded barcode GPT analysis]
+    D --> H[Server-side candidate lookup]
+    H --> J[Mode-specific website GPT analysis]
+    G --> K[Output validation]
+    J --> K
+    K --> T[Compact nutrition report]
+    R --> Q[Nutrition Q&A with product context]
+    Q --> U
+    T --> U
+```
+
+Website candidates remain unverified even after user confirmation. Confirmation establishes the user's intended product, not the accuracy of the website's nutrition claims.
 
 ## Technology stack
 
@@ -24,6 +58,9 @@
 | Backend | Python, FastAPI |
 | Product catalog | Open Food Facts |
 | Additional nutrition source | USDA FoodData Central |
+| Web discovery | Brave Search API |
+| Web extraction | Beautiful Soup, Python HTTP/TLS and DNS utilities |
+| Website AI analysis | OpenAI API (`gpt-4o-mini`) |
 | Image extraction | OpenAI API (`gpt-4.1-mini` used in the image-extraction workflow) |
 | Grounded nutrition analysis | OpenAI API (`gpt-4o-mini` used in the verified-nutrition workflow) |
 | Networking | REST/JSON, multipart uploads, `requests` and `httpx` |
@@ -47,6 +84,12 @@ NutriLens-AI/
 │   ├── nutrition_llm_analyzer.py    # Structured GPT analysis
 │   ├── nutrition_llm_validator.py   # Output validation
 │   ├── nutrition_pipeline.py        # End-to-end nutrition workflow
+│   ├── secure_web_fetch.py          # Defensive HTTPS fetching and cache
+│   ├── web_product_search.py        # Brave Search discovery and ranking
+│   ├── web_content_extractor.py    # HTML and structured metadata extraction
+│   ├── web_product_validator.py     # Identity and evidence validation
+│   ├── web_fallback_pipeline.py     # Website discovery orchestration
+│   ├── web_nutrition_pipeline.py    # Candidate cache and website AI analysis
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -70,13 +113,16 @@ The tree illustrates the relevant modules; local development files and temporary
 - Node.js and npm compatible with `frontend/package.json`
 - OpenAI API key
 - USDA FoodData Central API key for USDA lookups
-- Internet access for external APIs
+- Brave Search API key for website fallback
+- Internet access for external APIs and permitted product pages
 
 ### 1. Clone
 
 ```powershell
 git clone https://github.com/SumathiThanga/NutriLens-AI.git
 cd NutriLens-AI
+# If the latest implementation is on the feature branch:
+git switch feature/parallel-nutrition-apis
 ```
 
 ### 2. Configure and start the backend
@@ -93,6 +139,7 @@ Create `backend/.env` with the variable names expected by your installed backend
 ```dotenv
 OPENAI_API_KEY=your_openai_api_key
 USDA_API_KEY=your_usda_api_key
+BRAVE_SEARCH_API_KEY=your_brave_search_api_key
 ```
 
 If your local code uses a different USDA environment-variable name, use that exact name instead. Ensure your application loads `.env` (for example, through `python-dotenv` or your shell environment).
@@ -128,10 +175,13 @@ Open the URL printed by Vite (typically http://localhost:5173). The current loca
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/products/search` | Search catalog candidates by product name |
+| `POST` | `/products/search` | Search catalog candidates with website fallback |
 | `GET` | `/products/{barcode}` | Retrieve catalog details for a selected barcode |
 | `GET` | `/nutrition/analyze/{barcode}` | Run exact-barcode retrieval, consolidation, and grounded AI analysis |
 | `POST` | `/images/upload` | Classify an image and extract visible label information |
+| `POST` | `/nutrition/analyze-web` | Analyze a confirmed server-discovered website candidate |
+| `POST` | `/nutrition/ask` | Answer nutrition questions with optional product context |
+| `POST` | `/chat/route` | Classify product search, nutrition question or out-of-scope intent |
 
 ### Search for a product
 
@@ -178,6 +228,33 @@ Submit a JPEG, PNG, or WebP image to `POST /images/upload` as multipart form dat
 
 Visible product details can include `product_name`, `brand`, `variant`, `barcode`, `identification_confidence`, `quantity`, `ingredients`, and `nutrition_facts`. A generated explanation based on incomplete image data **does not constitute verified nutrition analysis**.
 
+### Analyze a website product
+
+Search for a product such as `Omay Foods Potato Flakes Tangy Masala`. When the catalog returns no candidates, inspect `web_discovery.candidates` in the search response. Review the product identity, source URL and extracted facts before confirming a match.
+
+```http
+POST /nutrition/analyze-web
+Content-Type: application/json
+```
+
+```json
+{
+  "analysis_id": "copy_the_actual_candidate_analysis_id",
+  "user_confirmed_identity": true
+}
+```
+
+The backend resolves the opaque identifier from its temporary server-side candidate cache rather than accepting arbitrary nutrition facts from the browser. Identifiers expire after 30 minutes or earlier eviction/restart. Search again if a candidate expires.
+
+| Analysis mode | Available evidence |
+| --- | --- |
+| `ingredient_based` | Reported ingredients without numerical nutrition |
+| `nutrition_based` | Reported numerical nutrition without ingredients |
+| `combined` | Both ingredients and numerical nutrition |
+| `limited` | Other supported declarations only |
+
+The response includes `verification_status`, `analysis_mode`, `source_url`, `status` and `analysis`. Analysis uses the same five structured fields as the barcode workflow. Website commentary is qualitative; numerical source values remain in the source table. Standard limitations are generated by the backend. If analysis fails, the frontend retains the extracted facts.
+
 ## Processing workflows
 
 ### Product name / barcode
@@ -209,13 +286,13 @@ File validation + image relevance classification
     ↓
 Vision model extracts visible product identity
     ↓
-React displays identity and confidence for confirmation
+React displays extracted package information for review
     ↓
-Catalog candidate search
+Barcode lookup or product-name search
     ↓
-User selects exact matching product (if available)
+User selects catalog or website candidate
     ↓
-Verified barcode nutrition pipeline
+Corresponding nutrition analysis pipeline
 ```
 
 When the brand or barcode cannot be read, the application must not assume a matching product or invent nutrients. The image endpoint can also produce preliminary label-based commentary, which should be distinguished from barcode-verified results.
@@ -231,6 +308,33 @@ When the brand or barcode cannot be read, the application must not assume a matc
 - **AI uncertainty:** Vision extraction and language-model analysis can be inaccurate; compare against the actual packaging when possible.
 - **Not medical advice:** The app provides informational insights, not individualized dietary or medical recommendations.
 
+### Website fallback
+
+```text
+No catalog candidates / catalog unavailable
+    ↓
+Brave Search → ranked, diverse website leads
+    ↓
+Direct product-page extraction / bounded homepage discovery
+    ↓
+Identity validation + source-supported fact extraction
+    ↓
+User confirms a potential match
+    ↓
+Server-side candidate lookup → mode-specific GPT analysis
+    ↓
+Output validation → source facts and AI commentary in React
+```
+
+Website extraction is best-effort and respects access failures rather than bypassing restrictions. Evidence matching and LLM validation reduce unsupported claims but cannot guarantee accuracy. Website sources are not merged into the exact-barcode nutrition pipeline as verified measurements.
+
+### Production readiness
+
+- Web caches and candidate identifiers are process-local; they are not shared across workers or bound to authenticated sessions.
+- Network protections are defense-in-depth, not a complete production security audit. Additional egress controls, concurrency limits and abuse protection are needed.
+- External websites may return rate limits, non-HTML content or incomplete information. Product ranking and identity validation may miss valid matches.
+- No production authentication, persistent multi-user storage, load testing or public HTTPS deployment is established by this prototype.
+
 ## Development tests and Git hygiene
 
 Temporary local scripts named `test*.py` are intended to remain internal. Add this rule to the repository's `.gitignore`:
@@ -238,6 +342,13 @@ Temporary local scripts named `test*.py` are intended to remain internal. Add th
 ```gitignore
 # Local-only development test scripts
 test*.py
+validated_products.json
+web_result.json
+.env
+.venv/
+__pycache__/
+node_modules/
+dist/
 ```
 
 `.gitignore` does not untrack files that have already been committed. For any previously tracked matching files, remove them from Git's index with `git rm --cached` while keeping the local copies. The rule also excludes automated test files matching this pattern; consider tracking a dedicated `tests/` suite later for reproducible CI.
@@ -246,10 +357,11 @@ Do not commit `.env`, API keys, virtual environments, generated credentials, or 
 
 ## Current development priorities
 
-1. Diagnose and resolve intermittent catalog-search failures after image confirmation.
-2. Improve explicit messaging for catalog unavailability versus zero matching products.
-3. Expand test coverage and verify behavior across additional branded foods and barcodes.
-4. Prepare secure, configurable deployment after the local workflow is stable.
+1. Resolve the Kruncho Classic Millet Cookie website discovery regression and investigate intermittent upstream catalog failures.
+2. Test the improved ingredient analysis and combined, nutrition-only and limited analysis modes across more products.
+3. Expand reproducible automated tests for source matching, allergen classification, network security and output validation.
+4. Prepare public HTTPS deployment on AWS, authentication, shared cache/storage, observability and multi-user load testing.
+5. Consider additional trusted nutrition sources and multi-image package uploads.
 
 ## License
 
